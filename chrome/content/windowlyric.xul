@@ -1,0 +1,216 @@
+﻿<?xml version="1.0"  encoding="UTF-8"?>
+<?xml-stylesheet href="chrome://doubanradio/skin/overlay.css" type="text/css"?>
+<window id="dbr_win_lyric"
+xmlns:html="http://www.w3.org/1999/xhtml"
+		xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" 
+		windowtype='DBR:LYRIC'
+		onload='load()'
+		class="lyric_window"
+		title="小明牌豆瓣电台"
+		onunload='unload()'
+		font="宋体"
+		persist="screenX screenY">
+	<script src="kit/util.js"/>
+	<script src="kit/move.js"/>
+	<hbox id='dbr_box_body' class = 'lyric_window2'>
+		<hbox id='dbr_box_kits' class='lyricwindow_body' >
+			<image  class='lyricwindow_kit' onmouseover="viewSongInfo()" tooltip= "dbr_ttp_song" id='dbr_btn_status' src='chrome://doubanradio/skin/douban.png'  onclick='doubanradio.open()'/>		
+			<hbox id ='dbr_box_kit' collapsed='true'>
+				<image class='lyricwindow_kit' id='dbr_btn_love' src='chrome://doubanradio/skin/like.png' onclick='love(event)'  tooltiptext='喜欢/不喜欢 （shift 不使用调教）'/>
+				<image class='lyricwindow_kit' src='chrome://doubanradio/skin/trash.png' onclick='doubanradio.hate(event)'  tooltiptext='讨厌'/>
+				<image class='lyricwindow_kit' src='chrome://doubanradio/skin/lyric.png' onclick='doubanradio.findLyric()'  tooltiptext='找歌词'/>	
+				<image  class='lyricwindow_kit' src='chrome://doubanradio/skin/album.png' onclick='doubanradio.getAlbumList()'  tooltiptext='听专辑'/>		
+				<image  class='lyricwindow_kit' src='chrome://doubanradio/skin/artist.png' onclick='doubanradio.getArtistList()'  tooltiptext='听歌手'/>	
+				<image  class='lyricwindow_kit' src='chrome://doubanradio/skin/download.png' onclick="doubanradio.download()"  tooltiptext='下载歌曲'/>
+				<image  class='lyricwindow_kit' src='chrome://doubanradio/skin/close.png' onclick="closeWindow(event)"  tooltiptext='关闭界面 /shift 关闭电台 '/>
+			</hbox>
+		</hbox>	
+		<label id='dbr_lbl_lyric' class = 'lyric' ondblclick='doubanradio.shareMusic()' tooltiptext="双击分享"/>
+	</hbox>
+	<stringbundleset>
+		<stringbundle id="dbr_stringbundle" src="chrome://doubanradio/locale/overlay.properties"/>
+	</stringbundleset>	
+    <popupset>
+        <tooltip id="dbr_ttp_song">
+            <html:div id="dbr_div_songtip" type="content"/>
+        </tooltip> 
+		<panel id="dbr_panel_alert" type ='arrow' >
+		    <vbox id ='dbr_vbox_alert'/>
+		</panel>
+		<menupopup id='lyricolor'>
+			<colorpicker id='drb_cp_lyric'  onclick='setFontColor(event)'/>   
+		</menupopup>
+	</popupset>
+		<script type="text/javascript">
+		<![CDATA[
+		
+		var $ = DBRUtil.$
+		var bss = Components.classes["@mozilla.org/observer-service;1"].getService(Components.interfaces.nsIObserverService);
+		var tf =0,tfc=0,radius=22
+		
+		var lyricObserver = {
+			observe:function(aSubject, aTopic, aData){
+				if(aTopic==DBRUtil.NOTIFY_LYRIC){
+					DBRUtil.$('dbr_lbl_lyric').setAttribute('value',aData.trim()==""?"    ":aData)
+					computeWidth() 
+				}
+				if(aTopic==DBRUtil.NOTIFY_STATUS){
+					setStatusIcon(aData)
+					computeWidth()
+				}
+				if(aTopic==DBRUtil.NOTIFY_MSG){
+					DBRUtil.alert(aData,null,$('dbr_btn_status'))
+					computeWidth() 
+				}
+			}
+		}
+		
+		
+		function getBoxWidth(name){
+			return $(name).getBoundingClientRect().width
+		}
+		
+		function setFavicon(){
+			if(doubanradio.radio.isLoved()){
+				$('dbr_btn_love').setAttribute("src","chrome://doubanradio/skin/like.png")
+			}else{
+				$('dbr_btn_love').setAttribute("src","chrome://doubanradio/skin/like2.png")
+			}
+		}
+		
+		function setStatusIcon(status){
+			DBRUtil.log2("windowlyric::status " + status)
+	        turnoffImage(status.indexOf('busy')>-1)
+			if(status.indexOf('play')>-1){
+				setFavicon()
+				$('dbr_btn_status').setAttribute('src', DBRUtil.getImageURL('douban.png'))
+				$('dbr_lbl_lyric').setAttribute('value', doubanradio.radio.getSongName())
+			}else{
+				if(status.indexOf('stop')>-1){
+					DBRUtil.$('dbr_lbl_lyric').setAttribute('value',"")
+				}
+				$('dbr_btn_status').setAttribute('src', DBRUtil.getImageURL(status))
+			}
+    	}
+		
+		function turnoffImage(flg){
+			if(!flg){
+				$('dbr_btn_status').setAttribute('style',"")
+				clearInterval(tfc);
+				tf = 0,tfc =0;
+				return	
+			} 
+			if(tfc == 0){
+				tfc = setInterval(function(){
+					$('dbr_btn_status').setAttribute('style',"-moz-transform:rotate("+30*(tf++)+"deg)")
+				},200)
+			}
+		}	
+		
+		function onTop(){
+			var wf = Components.classes["@mozilla.org/threads/workerfactory;1"].getService(Components.interfaces.nsIWorkerFactory);
+			var worker = wf.newChromeWorker("chrome://doubanradio/content/worker.js");
+			worker.onmessage = function(aMsg){
+				var data = aMsg.data;
+				switch (data.name) {
+					case "result":
+						break;
+					case "error":
+						Components.utils.reportError("onTop Error: " + data.value);
+						break;
+				}
+				worker.terminate();
+			}
+			var title = document.title;
+			worker.postMessage({
+				"name": "onTop",
+				"title": title
+			})
+		}
+		
+		function addObserver(){
+			 bss.addObserver(lyricObserver, DBRUtil.NOTIFY_LYRIC, false);
+			 bss.addObserver(lyricObserver, DBRUtil.NOTIFY_STATUS , false);
+			 bss.addObserver(lyricObserver, DBRUtil.NOTIFY_MSG , false);			 
+		}
+		
+		function removeObserver(){
+			 bss.removeObserver(lyricObserver, DBRUtil.NOTIFY_LYRIC);
+			 bss.removeObserver(lyricObserver, DBRUtil.NOTIFY_STATUS);
+			 bss.removeObserver(lyricObserver, DBRUtil.NOTIFY_MSG);
+		}
+		
+		function unload (){
+			 removeObserver();	
+		}
+		
+		function closeWindow(e){
+			if(!e.shiftKey){
+				window.close()
+			}else{
+				closeRadio();					
+			}
+		}
+		
+		function closeRadio(){
+			doubanradio.close()
+			$('dbr_box_kit').setAttribute('collapsed',true)
+			computeWidth()
+		}
+		
+		function computeWidth(){
+			window.innerWidth = getBoxWidth('dbr_lbl_lyric') + radius + getBoxWidth('dbr_box_kits')
+			test()
+		}
+		
+		function load(){
+			doubanradio = window.arguments[0].doubanradio
+			$('dbr_lbl_lyric').setAttribute('value', doubanradio.radio.getSongName())
+			onTop()
+			addObserver();
+			computeWidth()
+		}
+		
+		 function viewSongInfo(){
+	        var radio = doubanradio.radio
+			var html = DBRUtil.GSH('radiousage')
+	        var status = radio.getStatus() ;
+			if (status == doubanradio.radio.STATUS_BUSY) {
+				var radioName = radio.getRadioName()
+				var channelName = radio.getChannelName()
+				html = DBRUtil.GSH('readingradio',[radioName,channelName])
+	        }else if (status == radio.STATUS_PLAY) {
+				html = radio.getTooltipHtml()
+	        }
+			DBRUtil.injectHTML($("dbr_div_songtip"),html)
+			$('dbr_box_kit').setAttribute('collapsed',false)
+			computeWidth()
+		}
+		
+		function test(){
+			DBRUtil.log2("window.innerWidth : " + window.innerWidth)
+			DBRUtil.log2("window.innerHeight : " + window.innerHeight)
+			DBRUtil.log2("window.width : " + window.width)
+			DBRUtil.log2("window.height : " + window.height)
+			DBRUtil.log2("dbr_lbl_lyric : " + getBoxWidth('dbr_lbl_lyric'))
+			DBRUtil.log2("dbr_box_kits : " + getBoxWidth('dbr_box_kits'))			
+		}
+		
+		function love(e){
+			doubanradio.love(e,true)
+			setFavicon()
+		}
+		$('dbr_box_kits').addEventListener("mouseout", function(){
+			$('dbr_box_kit').setAttribute('collapsed',true)	
+			computeWidth()
+		}, false);
+		$('dbr_box_kits').addEventListener("mouseover", function(){
+			$('dbr_box_kit').setAttribute('collapsed',!doubanradio.radio.isOpen())
+			setFavicon()
+			computeWidth()
+		}, false);
+		
+			]]>
+	</script>
+</window>
+		

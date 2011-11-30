@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="chrome://doubanradio/skin/overlay.css" type="text/css"?>
+<!DOCTYPE overlay SYSTEM "chrome://doubanradio/locale/overlay.dtd">
+<overlay id="doubanradio_overlay" 
+xmlns:html="http://www.w3.org/1999/xhtml"
+xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+	<!-- 元素命名规则: dbr_+控件缩写+功能描述 -->	
+	<stringbundleset>
+		<stringbundle id="dbr_stringbundle" src="chrome://doubanradio/locale/overlay.properties"/>
+	</stringbundleset>	
+	
+	<window id="main-window">
+		<keyset>
+			<key id='dbr_key_open' key="[" command = 'dbr_cmd_open'/>
+			<key id ='dbr_key_close' key="]" command = 'dbr_cmd_close'/>
+			<key id ='dbr_key_download' key="=" command = 'dbr_cmd_download'/>
+			<key id='dbr_key_album' key="-" oncommand = 'douban_radio.showInfo()'/>
+			<key id ='dbr_key_findlyric' key=";" command = 'dbr_cmd_findlyric'/>
+			<key key="\\" oncommand = 'douban_radio.shareMusic()'/>
+			<key key="m" oncommand = 'douban_radio.popupMenu()'/>	
+			<key key="0" oncommand = 'douban_radio.love2()'/>
+		</keyset>
+		<commandset>
+			<command id='dbr_cmd_open' oncommand='douban_radio.open()'/>
+			<command id='dbr_cmd_findlyric' oncommand='douban_radio.findLyric()'/>
+			<command id='dbr_cmd_close' oncommand='douban_radio.close()'/>
+			<command id='dbr_cmd_download' oncommand='douban_radio.download()'/>
+		</commandset>
+	</window>
+	
+	<statusbar id="status-bar">
+		<statusbarpanel id='dbr_sbp_container'>
+			<label hidden='true'/>
+		</statusbarpanel>
+ 	</statusbar>
+	
+    <popupset>
+        <tooltip id="dbr_ttp_song">
+            <html:div id="dbr_div_songtip" type="content"/>
+        </tooltip>     
+		<menupopup id='lyricolor'>
+			<colorpicker id='drb_cp_lyric'/>   
+		</menupopup>
+		<panel id="dbr_panel_alert" type ='arrow' >
+		    <vbox id ='dbr_vbox_alert'/>
+		</panel>
+    </popupset>
+	
+	<script src="kit/util.js"/>
+	<script src="kit/sha1.js"/>
+	<script src="module_lyric/lrc.js"/>
+	<script src="module_radio/douban.js"/>
+	<script src="module_radio/renren.js"/>
+	<script src="module_radio/sina.js"/>
+	<script src="module_radio/songbean.js"/>
+	<script src="module_radio/radio.js"/>
+	<script src="controller.js"/>
+	<script src="kit/hookdouban.js"/>
+	<script src="releasenote.js"/>
+</overlay>

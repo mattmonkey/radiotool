@@ -1,0 +1,165 @@
+<?xml version="1.0"  encoding="UTF-8"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<window id="DRB_MYLIST"
+		xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" 
+		onload='init()'
+		title = '定制红心歌单'
+		persist="screenX screenY">
+	<script src="kit/util.js"/>
+	<script src="kit/sha1.js"/>
+	<script type="text/javascript">
+		<![CDATA[
+			var rslt = {}
+        	var mylist = JSON.parse(DBRUtil.getPref('mylist','{}'))
+			var $ = DBRUtil.$
+			var ce = DBRUtil.ce
+			var songs=[]
+			
+			function init(){
+				for each( var song in mylist){
+					songs.push(song)
+					ce('checkbox','body',{id:'C'+song.sid, label: song.title + ' / ' +song.artist,sid : song.sid},null,true)
+				}
+				document.title = document.title + ' 已经收录{num}首'.replace('{num}',songs.length)		
+			}
+			
+			function submit(){
+				for each(var song in rslt){
+					window.arguments[0].push(song)
+				}
+		        window.close()
+			}
+						
+			function checkIt(e){
+				if(e.target.tagName !='checkbox') return 
+				markSong(e.target.getAttribute('sid'))
+			}
+			
+			function markSong(sid){
+				if(rslt[sid]){
+					delete rslt[sid]
+					$('C'+sid).checked=false
+				}else{
+					rslt[sid]=mylist[sid]
+					$('C'+sid).checked=true
+				}
+			}
+			
+			// 导出数据
+			function outputData(e,list){
+				var content = JSON.stringify(rslt)
+				if(content!='{}'){
+					var v = DBRUtil.genSignatur2(content)
+					DBRUtil.copy2clipboard((list==null?"":list) +JSON.stringify({content:content,verify:v,version:1}))
+					alert(DBRUtil.GSA('copyed'))
+				}else{
+					 alert(DBRUtil.GSA('noselecteddata'))
+				}
+			}
+			
+			function outputData2(){
+				outputData(null, content)
+			}
+			
+			// 导入数据
+			function inputData(){
+				var content = prompt('输入红心歌单数据')
+				if(content){
+					try {
+						var tmp = JSON.parse(content);
+						if ( typeof tmp !='object') throw "数据错误"
+						if(!tmp['verify']) throw "没有发现验证码"
+						if (tmp['verify'] !=DBRUtil.genSignatur2(tmp.content)){
+							throw "无效的验证码"
+						}
+						tmp = JSON.parse(tmp.content)
+						var cnt = 0
+						var rslt2 = JSON.parse(DBRUtil.getPref('mylist','{}'))
+						for each(var song in tmp){
+							if(rslt2[song.sid]==undefined){
+								cnt++
+								rslt2[song.sid] = song
+							}
+						}
+						DBRUtil.setPref('mylist',JSON.stringify(rslt2))
+						alert('导入成功，新增了'+cnt+ '首. 重启当前界面后可见')
+					}catch(e){
+						alert(e)
+					}
+				}
+			}
+			
+			function genRandomList(){
+				var len =songs.length < 8 ? songs.length : 8
+				for(var i=0;i<= len;i++){
+					window.arguments[0].push(songs[DBRUtil.getRandomNum(songs.length)]);
+				}
+				window.close()
+			}
+			
+			// 切换精简/复杂
+			function toggleUI(e){
+				$('detailbox').hidden=!$('detailbox').hidden
+				e.target.setAttribute('label',e.target.getAttribute('label')=="精简"?"复杂":"精简")
+				if(!$('detailbox').hidden) $('inputbox').focus()
+			}
+		
+			// 
+			function selectAll(e){
+				e.target.setAttribute('label',e.target.getAttribute('label')=="清除"?"全选":"清除")
+				var clearFlg = e.target.checked
+				for(var i=0;i< $('body').childNodes.length;i++){
+					var box = $('body').childNodes[i]
+					if(box.hidden==false){
+						var sid = box.getAttribute('sid') 
+						$('C'+sid).checked=clearFlg
+						clearFlg? rslt[sid]=mylist[sid] : delete rslt[sid]
+					}
+				}
+			}
+
+			// 过滤条件
+			function filter(e){
+				if(e.keyCode!=13) return
+				var str = e.target.value.trim()
+				DBRUtil.log2(str)
+				for each(var song in songs){
+					DBRUtil.log2(song.artist + " " +str==''?false:song.artist.indexOf(str)==-1)
+					$('C'+song.sid).hidden = str==''?false:song.artist.indexOf(str)==-1
+				}
+			}
+		]]>
+	</script>
+		<hbox >
+			<button label='随机几首' oncommand='genRandomList()' accesskey='r'/>
+			<label flex='1'/>
+			<button label='复杂' oncommand="toggleUI(event)"  accesskey='d'/>
+		</hbox>
+		<vbox id='detailbox' hidden ='true'>
+			<hbox>
+				<textbox id='inputbox' flex='1'  onkeydown="filter(event)">
+					<label value='歌手: '/>
+				</textbox>
+			</hbox>
+			<hbox>
+				<button label ='导入' oncommand='inputData()' accesskey='1'/>
+				<button label ='导出' oncommand='outputData()' accesskey='2'/>
+				<button label ='导出(分享格式)' oncommand='outputData2()' accesskey='3'/>
+			</hbox>
+		</vbox>
+
+				
+		<richlistbox  flex='1' id ='body' onclick = "checkIt(event)"/>
+		<hbox>
+			<checkbox label='全选' oncommand = 'selectAll(event)' accesskey='s'/>
+			<label flex='1'/>
+			<button label='取消' oncommand = 'window.close()' accesskey='c'/>
+			<button label='确定' oncommand = 'submit()' accesskey='e'/>
+		</hbox>
+		<stringbundleset>
+			<stringbundle id="dbr_stringbundle" src="chrome://doubanradio/locale/overlay.properties"/>
+		</stringbundleset>	
+</window>
+
+
+

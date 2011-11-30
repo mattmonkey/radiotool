@@ -1,0 +1,41 @@
+<?xml version="1.0"  encoding="UTF-8"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<dialog id="dbr_dialog_listeditor"
+		xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" 
+		onload = 'initUI()'
+		persist="screenX screenY"
+		ondialogaccept="submit();">
+		<script src="kit/util.js"/>
+		<script src="kit/sha1.js"/>
+		<script type="text/javascript">
+			<![CDATA[	
+				var songList  = {}
+				var ce = DBRUtil.ce
+				var $ = DBRUtil.$		
+				var artistList = DBRUtil.getPref2('artistlist')
+				function initUI(){
+					for (var aid in artistList){
+						ce('radio','artistgroup',{label:artistList[aid],id:aid})
+					}
+				}
+				function submit(){
+					var nodes = document.getElementsByTagName('radio')
+					for each(var r in nodes){
+						if(r.selected == true){
+							window.arguments[0].push({aid:r.id,name:r.label})
+						}
+					}
+					return true
+				}	
+			]]>
+		</script>
+		<tabbox id="myTabList" selectedIndex="0">
+		  <tabs>
+		    <tab label="音乐人"/>
+		   <!-- <tab label="专辑"/>-->
+		  </tabs>
+		  <tabpanels>
+		    <tabpanel><radiogroup  height ='500px'  flex= '1' id='artistgroup' style="overflow:auto" /></tabpanel>
+		    </tabpanels>
+		</tabbox>
+</dialog>

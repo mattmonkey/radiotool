@@ -1,0 +1,179 @@
+<?xml version="1.0"  encoding="UTF-8"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<window id="dbr_dialog_listeditor"
+		xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" 
+		onload = 'initUI()'
+		persist="screenX screenY">
+		<script src="kit/util.js"/>
+		<script src="kit/sha1.js"/>
+		<script type="text/javascript">
+			<![CDATA[						
+				var p = window.arguments[0]
+				var songList  = {}
+				var ce = DBRUtil.ce
+				var $ = DBRUtil.$
+				
+				// 统一获取各个电台不同的数据格式
+				function getID(song){
+					return song.id == undefined?(song.songId == undefined ? song.sid:song.songId):song.id 
+				}
+				
+				function getTitle(song){
+					return song.id == undefined?(song.songId == undefined ? song.title:song.songName):song.name 
+				}
+				
+				function getArtist(song){
+					return song.id == undefined?(song.songId == undefined ? song.artist:song.artistName):song.artistName 
+				}
+				
+				function getAlbum(song){
+					return song.id == undefined?(song.songId == undefined ? song.albumtitle:song.albumName):song.albumName 
+				}
+				
+				function getSongs(data){
+					if(data.song) return data.song;
+					if(data.songs) return data.songs;
+					if(data.content) return data.content;
+				}
+				
+				// 初始界面
+				function initUI(){
+					DBRUtil.$('dbr_btn_getlist').setAttribute('label',DBRUtil.GSC('getrandomlist',[p.cname]))
+					document.title=DBRUtil.GSC('randomlisttitle')
+					$('dbr_tb_filter').value = p.cname
+					// if(!p.flg || true) $('dbr_hb_filter').hidden = true
+					appendSongList({target:$('dbr_btn_getlist')})
+				}
+				
+				// 追加歌单
+				function appendSongList(e){
+					let btn = e.target;
+					let rn = 1 
+					btn.setAttribute('disabled',true)
+					for(var cnt =1; cnt <= rn; cnt++){
+						DBRUtil.log2('SLR '+p.url)
+						DBRUtil.sendXHR(p.url, null, function(txt){
+							// 恢复按钮
+							btn.setAttribute('disabled',false)
+							let tmp  = JSON.parse(txt)						
+							// 过滤
+							tmp.song = getSongs(tmp).filter(function(element, index, array) {
+								DBRUtil.log2(getAlbum(element))
+								return /^\d{1,}/.test(getID(element));
+							})
+							// 生成列表
+							initList(tmp.song)
+							if(p.type!='command')filter()
+						})
+					}
+				}
+				
+				// 初始化歌单列表
+				function initList(songs){
+					// 生成全歌单列表
+					for(let i in songs){
+						songList[getID(songs[i])] = songs[i];
+						let sid = getID(songs[i]);
+						let id = 'mysong_'+sid;
+						let title = getTitle(songs[i])
+						let album = getAlbum(songs[i])
+						let artist = getArtist(songs[i])
+						let rli = ce('richlistitem','dbr_rlb_songslist')		
+                        // 缓存歌单数据
+						let label = title +"  /  "+ artist +"  /  "+ album
+						// 加入含歌曲简单信息的checkbox
+						if(!$(id)){
+							ce('checkbox',rli,{sid:sid,id:id,label:label,flex:1})
+						}
+						if(p.type!='command')$(id).checked = true
+					}
+				}
+				
+				
+				function filter(e){
+					var filterString = $('dbr_tb_filter').value
+					for each(let song in songList){
+						try{
+							let sid = getID(song);
+							let id = 'mysong_'+sid;
+							let title = getTitle(song)
+							let album = getAlbum(song)
+							let artist = getArtist(song)
+							DBRUtil.log2(album)
+							if (p.type == DBRUtil.MODE_MUSICIAN) {
+								if (checkArtist(artist,filterString)) {
+									$(id).hidden = false
+									continue;
+								}
+							}
+							if (p.type == DBRUtil.MODE_ALBUM) {
+								if (checkAlbum(album,filterString)) {
+									$(id).hidden = false;
+									continue;
+								}
+							}
+							$(id).hidden = true;
+						}catch(e){
+							DBRUtil.log2(e)
+						}
+					}
+				}
+				
+				function checkArtist(artist,filterstring){
+					if(!p.flg){
+						return artist.indexOf(filterstring) >=0
+					}else{
+						//  从页面启动电台工具的情况就反过来比较
+						return filterstring.indexOf(artist) >=0 
+					}
+				} 
+				
+				function checkAlbum(album, filterstring){
+					if(!p.flg){
+						return album.indexOf(filterstring) >=0
+					}else{
+						// 从页面启动电台工具的情况就去掉[...]反过来比较
+						return filterstring.indexOf(album.replace('...','')) >=0
+					}
+				}
+				
+				// 返回选中数据
+				function submit(){
+					var cNode = $('dbr_rlb_songslist').getElementsByTagName('checkbox');
+					var rslt = []
+					for (var i=0;i<cNode.length;i++) {
+						if (cNode[i].hidden == false && cNode[i].getAttribute('checked')) 
+							rslt.push(songList[cNode[i].getAttribute('sid')])
+					}
+					p.out = JSON.stringify(rslt)
+					window.close()
+				}
+				
+				function selectAll(e){
+					var status =  e.target.getAttribute('checked')=='true';
+					var songs  =	$('dbr_rlb_songslist').getElementsByTagName('checkbox')
+					for each(var song in songs){
+						if(song.hidden == false){
+							song.setAttribute('checked',!status)
+						}
+					}
+				}				
+			]]>
+		</script>
+
+		<button id ='dbr_btn_getlist' onclick='appendSongList(event)' accesskey='q'/>
+		<hbox id ='dbr_hb_filter'  hidden='true'>
+			<button label='过滤' oncommand='filter(event)'/>
+			<textbox id ='dbr_tb_filter' flex='1'></textbox>
+		</hbox>
+		<richlistbox id ='dbr_rlb_songslist' flex= '1'/>
+		<stringbundleset>
+			<stringbundle id="dbr_stringbundle" src="chrome://doubanradio/locale/overlay.properties"/>
+		</stringbundleset>
+		<hbox>
+			<!--<checkbox onclick='selectAll(event)' label=''/>-->
+			<label flex='1'/>
+			<button label='取消' oncommand='window.close()'  accesskey='c'/>
+			<button label='确定' oncommand='submit()'  accesskey='e'/>
+		</hbox>	
+</window>

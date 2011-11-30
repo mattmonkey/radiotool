@@ -1,0 +1,277 @@
+<?xml version="1.0"  encoding="UTF-8"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<window id="dbr_win_lyricfinder"
+		xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" 
+		onload = 'init()'
+		persist="screenX screenY">
+	<script src="kit/util.js"/>
+	<script src="kit/sha1.js"/>
+	<script src="module_lyric/lrc.js"/>	
+	<script type="text/javascript">
+		<![CDATA[
+			DBRUtil.loadLyricScript();
+			
+			var tmpLyrics = [];		
+			var p = window.arguments[0]
+			var tabs,cond,tps,sbtn;	
+			var timer = null;
+			var ce = DBRUtil.ce, $ = DBRUtil.$;
+			var contentLimit = {
+				sina:140,
+				douban:128
+			}
+			setLyricEngine();
+			
+			function setLyricEngine(){
+				if(DBRUtil.getPref('lyricengine')=='yahoo'){
+					DBRUtil.crtLyricEngine = new DBRUtil.LyricEngineByYahoo();			
+				}else{
+					DBRUtil.crtLyricEngine = new DBRUtil.LyricEngineByYoudao();			
+				}
+			}	
+			// 初始化专辑信息
+			function init(){
+				// 设置歌曲信息
+				ce('label','dbr_box_songinfo',{value:"歌名: " + p.title})
+				ce('label','dbr_box_songinfo',{value:"歌手: " + p.artist})
+				ce('label','dbr_box_songinfo',{value:"专辑: " + p.album})
+				
+				tabs = document.getElementById('Rslt-Tabs');
+				cond = document.getElementById('cond');
+				tps =  document.getElementById('Lyric-Tabpanels');
+				sbtn = document.getElementById('search');				
+				// 设置检索条件
+				cond.value = p.title + " " + p.artist.split('/')[0]
+				// 利用content判断是分享还是查找歌词
+				$('dbr_vbx_msg').hidden = (p.content==undefined);
+				$('dbr_vbx_search').hidden = (p.content!= undefined);
+				
+				if(p.content){
+					$('body2').hidden = true
+					document.title = DBRUtil.GSC('findlyrictitle4share',[p.site])
+					$('dbr_tbx_msg').setAttribute('value',p.content);	
+					showShareString()
+					$('dbr_tbx_msg').focus()							
+				}else{
+					document.title =  DBRUtil.GSC('findlyrictitle')
+					search()
+				}
+			}		
+			
+			// 检索歌词
+			function search(){
+				var c = cond.value
+				if(c.trim()=="") return ;
+				if ($('dbr_vbx_msg').hidden) {
+					if (timer != null) timer.stop()
+					timer = new DBRUtil.Timer(setCurrentLyric)
+					timer.start()
+				}
+				sbtn.setAttribute('disabled',true)
+				clear();
+				tmpLyrics=[];
+				DBRUtil.crtLyricEngine.searchLyric(c,true,function(data){
+					tabs.selectedIndex = 0;
+					sbtn.setAttribute('disabled',false)
+					ce('tab','Rslt-Tabs',{label:'  '})
+					var d = new DBRUtil.LrcParser(data).getData()
+					var tp = ce('tabpanel',tps,{flex:1,style:"overflow:auto"})
+					if($('dbr_vbx_msg').hidden == false){
+						// 分享时
+						var box = ce('textbox',tp,{flex:1,multiline:true})	
+						box.value  = data.join(' / \n').replace(/\[.*\]/g,'')
+						$('body2').hidden = true;
+					}else{
+						var box = ce('vbox',tp,{flex:1})
+						for(var c in d){
+							ce('label',box,{flex:1,value:d[c][2]+ d[c][1],time:d[c][0]})
+						}
+						tmpLyrics.push([d])						
+					}
+					
+				},function(){
+					alert(DBRUtil.GSA('nocontent'))
+					sbtn.setAttribute('disabled',false)
+				})
+			}
+			
+			// 设置当前歌词的颜色
+			function setCurrentLyric(){
+				if(tps.selectedPanel!=null){
+					var labels = tps.selectedPanel.childNodes[0].childNodes
+					var t = null
+					for(var i=0 ;i < labels.length;i++){
+						if( p.rl.getCurrentTime()<parseInt(labels[i].getAttribute('time'))){
+							t = i
+							break;
+						}
+						labels[i].setAttribute('style', "color:black")
+					}
+					if (t !== null) {
+						if (labels[t - 1 < 0 ? 0 : t - 1]) {
+							labels[t - 1 < 0 ? 0 : t - 1].setAttribute('style', "color:red")
+						}	
+					}
+				} 
+			}
+			
+			// 应用歌词
+			function applyLyric(){
+				if (tabs.selectedIndex >= 0) {
+					if(confirm("是否把选择的歌词应用到当前")){
+						p.out=tmpLyrics[tabs.selectedIndex]
+					}
+				}
+				window.close()
+			}
+			
+			// 清除歌词结果
+			function clear(){
+				mpLyrics = []
+				DBRUtil.clearNode(tabs)
+				DBRUtil.clearNode(tps)
+			}
+			
+			// 发送分享内容
+			function sendShareMessage(){
+				p.out = computeShareString().content
+				window.close()
+			}
+
+			// 根据不同站点的规则计算长度
+			function count(content){
+				var l = content.length
+				if(p.site == 'sina'){
+					var tmp = content.match(/[\x00-\xff]/g),l2=0
+					if(tmp){
+						l2 = Math.ceil(tmp.length / 2)
+						l = l- tmp.length +l2  
+					}
+				}
+				return l 
+			}
+			
+			// 计算分享用的文字
+			function computeShareString(){
+				var topic =  p.site=='sina'? DBRUtil.getPref('topicstring') :""
+				var content = $('dbr_tbx_msg').value.trim().replace(/(\r|\n)/g,'');
+				var strlen = count(content + topic),rslt;
+				
+				if(strlen <= contentLimit[p.site]){
+					rslt =[topic+content]
+				}else{
+					rslt = cutShareMsg(content,topic)
+				}
+				return {len:strlen,content:rslt}
+			}
+			
+			function showShareString(){
+				var data = computeShareString()
+				$('dbr_lbl_msgcnt').setAttribute('value'," " + data.len+' 字，共'+data.content.length+'条')
+			}
+			
+			// 好像仅仅能应对只有一条链接的情况
+			function cutShareMsg(content,topic){
+				// 计算字符串中link的位置
+				function computeLinkPos(content){
+					var data = content.match(/((http(s?))\:\/\/)([0-9a-zA-Z\-]+\.)+[a-zA-Z]{2,6}(\:[0-9]+)?(\/([\w#!:.?+=&%@~*;,\-\/\$])*)?/g)
+					if(data){
+						return [content.indexOf(data[0]),data[0].length,data[0]]
+					}
+					return null
+				}
+				// 获取消息的限制长度
+				function getLenlimit(){
+					return contentLimit[p.site] -5-topic.length
+				}
+				
+				// 截取一段消息
+				function getPart(content){
+					if(p.site=='douban') return content.substring(0,getLenlimit()) 
+					var limit = getLenlimit()*2;
+					var len = 0;
+					var tmp = ''
+					for each (var c in content){
+						/[\x00-\xff]/.test(c)?len+=1:len+=2
+						if(len > limit) break;
+	 					tmp += c
+					}
+					return tmp	
+				}
+				
+				// 规避链接的切割字符串
+				function cutString(content){
+					// 获取全文里链接的位置数据
+					var d = computeLinkPos(content)
+					var part = getPart(content)
+					if(d){
+						// 片段包含不完整链接 d[0] 开始位置 d[1] 长度
+						if(d[0]+d[1]>part.length && d[0]<=part.length){
+							// 链接被切割。
+							return [content.slice(d[0]),content.slice(0,d[0])]
+						}			
+					}
+					// 返回新全文和切割
+					return [content.slice(part.length),part]	
+				}
+				
+				// 计算分割分销消息
+				function computeContent(content,cache){
+					var data = cutString(content)
+					cache.push(data[1])
+					if(data[0]==''||data[0]==undefined){
+						return cache
+					}else{
+						return computeContent(data[0],cache)
+					} 
+				}
+				
+				return computeContent(content,[]);
+				
+			}
+			
+			// 切换UI
+			function toggleUI(e){
+				var flg  = $('dbr_vbx_search').hidden
+				window.innerHeight = flg ? 600 : 200
+				e.target.label= flg ? '不显示歌词' : '显示歌词'
+				$('dbr_vbx_search').hidden = !flg
+				flg?search():""
+				// 窗口居中			
+				window.screenY = (window.screen.height - window.innerHeight)/2
+			}
+								
+		]]>
+	</script>
+	<vbox id ='dbr_vbx_msg'>
+		<textbox id ='dbr_tbx_msg' multiline='true' rows ='8' oninput = 'showShareString()'/>
+		<hbox>
+			<label id='dbr_lbl_msgcnt' flex= '1'/>
+			<button label ='显示歌词'  onclick='toggleUI(event)' accesskey='l'/>
+			<button label ='分享' onclick='sendShareMessage()' accesskey='s'/>
+		</hbox>
+	</vbox>	
+	<vbox flex='1' id ='dbr_vbx_search'>
+		<vbox id='dbr_box_songinfo'/>	
+		<label value="组合'歌手' '歌名' '专辑' '歌词' 查询" style='color:red'/>
+		<vbox flex= '1'>
+			<hbox>
+				<textbox id = 'cond' flex= '1'/>
+				<button id = 'search' label='查询' onclick="search()" accesskey='q'/>
+			</hbox>
+		
+			<tabbox id ='SearchWin-TabBox' flex= '1'>
+				<tabs id="Rslt-Tabs"/>
+				<tabpanels id= 'Lyric-Tabpanels' flex= '1'/>
+			</tabbox>
+		</vbox>	
+		<hbox id='body2'>
+			<label flex='1'/>	
+			<button id = 'cancel' label='取消' onclick="window.close()" accesskey='c'/>
+			<button id = 'submit' label='应用歌词' onclick="applyLyric()" accesskey='e'/>		
+		</hbox>
+	</vbox>
+	<stringbundleset>
+		<stringbundle id="dbr_stringbundle" src="chrome://doubanradio/locale/overlay.properties"/>
+	</stringbundleset>	
+</window>
